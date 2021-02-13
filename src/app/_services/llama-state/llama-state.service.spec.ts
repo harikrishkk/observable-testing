@@ -6,7 +6,7 @@ import { LlamaRemoteService } from '../llama-remote/llama-remote.service';
 import { Spy, createSpyFromClass } from 'jasmine-auto-spies';
 import { appRoutesNames } from '../../app.routes.names';
 import { RouterAdapterService } from '../adapters/router-adapter/router-adapter.service';
-
+import { ObserverSpy } from '@hirez_io/observer-spy';
 describe('LlamaStateService', () => {
   let serviceUnderTest: LlamaStateService;
   let llamaRemoteServiceSpy: Spy<LlamaRemoteService>;
@@ -42,17 +42,29 @@ describe('LlamaStateService', () => {
 
   describe('METHOD: getFeaturedLlamas$', () => {
     let expectedQueryConfig: QueryConfig;
+    let observerSpy: ObserverSpy<Llama[]>;
     expectedQueryConfig = {
       filters: {
         featured: true
       }
     };
 
-    When(() => {
-      serviceUnderTest.getFeaturedLlamas$().subscribe(value => (actualResult = value));
+    describe('GIVEN llamas return successfully When subscribing & trigger mutation once then receive 2 llamas ', () => {
+      Given(() => {
+        observerSpy = new ObserverSpy();
+        llamaRemoteServiceSpy.getMany.and.nextWith();
+      });
+      When(() => {
+        const sub = serviceUnderTest.getFeaturedLlamas$().subscribe(observerSpy);
+        serviceUnderTest['mutationSubject'].next();
+        sub.unsubscribe();
+      });
+      Then(() => {
+        expect(observerSpy.getValuesLength()).toBe(2);
+      });
     });
 
-    describe('given llamas loaded successfully from server', () => {
+    describe('given llamas loaded successfully from server, when subscribing', () => {
       Given(() => {
         fakeLlamas = [{ id: 'FAKE ID', name: 'FAKE NAME', imageFileName: 'FAKE IMAGE' }];
         llamaRemoteServiceSpy.getMany
@@ -60,12 +72,16 @@ describe('LlamaStateService', () => {
           .nextOneTimeWith(fakeLlamas);
       });
 
+      When(() => {
+        serviceUnderTest.getFeaturedLlamas$().subscribe(value => (actualResult = value));
+      });
+
       Then(() => {
         expect(actualResult).toEqual(fakeLlamas);
       });
     });
 
-    describe('given loaded llama is poked by user', () => {
+    describe('given loaded llama is poked by user, when subscribing', () => {
       const fakeUserLlamaId = 'fakeid';
       Given(() => {
         const fakePokedLlama = createDefaultFakeLlama();
@@ -76,6 +92,11 @@ describe('LlamaStateService', () => {
           .mustBeCalledWith(expectedQueryConfig)
           .nextOneTimeWith(fakeLlamas);
       });
+
+      When(() => {
+        serviceUnderTest.getFeaturedLlamas$().subscribe(value => (actualResult = value));
+      });
+
       Then(() => {
         const expectedPokedLlama: Llama = actualResult[0];
         expect(expectedPokedLlama.isPoked).toBe(true);
