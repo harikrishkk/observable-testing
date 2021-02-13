@@ -3,8 +3,8 @@ import { Llama } from '../../_types/llama.type';
 import { LlamaRemoteService } from '../llama-remote/llama-remote.service';
 import { RouterAdapterService } from '../adapters/router-adapter/router-adapter.service';
 import { appRoutesNames } from '../../app.routes.names';
-import { Observable, BehaviorSubject } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { Observable, BehaviorSubject, Subject } from 'rxjs';
+import { map, mergeMap } from 'rxjs/operators';
 import produce from 'immer';
 
 @Injectable({
@@ -12,20 +12,23 @@ import produce from 'immer';
 })
 export class LlamaStateService {
   private userLlamaSubject: BehaviorSubject<Llama> = new BehaviorSubject(null);
-
+  private mutationSubject: BehaviorSubject<void> = new BehaviorSubject(null);
   constructor(
     private llamaRemoteService: LlamaRemoteService,
     private routerAdapterService: RouterAdapterService
   ) {}
 
   getFeaturedLlamas$(): Observable<Llama[]> {
-    return this.llamaRemoteService
-      .getMany({
-        filters: {
-          featured: true
-        }
-      })
-      .pipe(map(llamas => this.decorateWithIsPoked(llamas)));
+    return this.mutationSubject.pipe(
+      mergeMap(_ =>
+        this.llamaRemoteService.getMany({
+          filters: {
+            featured: true
+          }
+        })
+      ),
+      map(llamas => this.decorateWithIsPoked(llamas))
+    );
   }
 
   private decorateWithIsPoked(llamas: Llama[]): Llama[] {
@@ -45,7 +48,7 @@ export class LlamaStateService {
   }
 
   // TODO: Handle Errors?
-  pokeLlama(llama: Llama) {
+  async pokeLlama(llama: Llama) {
     const userLlama = this.userLlamaSubject.getValue();
     if (!userLlama) {
       this.routerAdapterService.goToUrl(`/${appRoutesNames.LOGIN}`);
@@ -55,9 +58,10 @@ export class LlamaStateService {
     const pokedByClone = llama.pokedByTheseLlamas ? [...llama.pokedByTheseLlamas] : [];
     pokedByClone.push(userLlama.id);
 
-    this.llamaRemoteService.update(llama.id, {
+    await this.llamaRemoteService.update(llama.id, {
       pokedByTheseLlamas: pokedByClone
     });
+    this.mutationSubject.next();
   }
 
   getUserLlama$(): Observable<Llama> {
