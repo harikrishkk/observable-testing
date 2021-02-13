@@ -2,12 +2,11 @@ import { TestBed, fakeAsync } from '@angular/core/testing';
 import { Spy, createSpyFromClass } from 'jasmine-auto-spies';
 import { LlamaRemoteService, LLAMAS_REMOTE_PATH } from './llama-remote.service';
 import { Llama } from '../../_types/llama.type';
-import { HttpClient } from '@angular/common/http';
 import { HttpAdapterService } from '../adapters/http-adapter/http-adapter.service';
+import { QueryConfig } from 'src/app/_types/query-config.type';
 
 describe('LlamaRemoteService', () => {
   let serviceUnderTest: LlamaRemoteService;
-  let httpSpy: Spy<HttpClient>;
   let httpAdapterServiceSpy: Spy<HttpAdapterService>;
 
   let fakeLlamas: Llama[];
@@ -19,13 +18,11 @@ describe('LlamaRemoteService', () => {
     TestBed.configureTestingModule({
       providers: [
         LlamaRemoteService,
-        { provide: HttpClient, useValue: createSpyFromClass(HttpClient) },
-        { provide: HttpAdapterService, useValue: createSpyFromClass(HttpAdapterService) },
+        { provide: HttpAdapterService, useValue: createSpyFromClass(HttpAdapterService) }
       ]
     });
 
     serviceUnderTest = TestBed.get(LlamaRemoteService);
-    httpSpy = TestBed.get(HttpClient);
     httpAdapterServiceSpy = TestBed.inject<any>(HttpAdapterService);
 
     fakeLlamas = undefined;
@@ -34,23 +31,44 @@ describe('LlamaRemoteService', () => {
     expectedReturnedLlama = undefined;
   });
 
-  describe('METHOD: getLlamasFromServer', () => {
-
+  describe('method getMany', () => {
+    let queryConfig: QueryConfig;
     When(() => {
-      serviceUnderTest.getLlamasFromServer().subscribe(value => actualResult = value);
+      serviceUnderTest.getMany(queryConfig).subscribe(val => (actualResult = val));
     });
 
-    describe('GIVEN a successful request THEN return the llamas', () => {
+    describe('given no config', () => {
       Given(() => {
-        fakeLlamas = [{id: 'FAKE ID', name: 'FAKE NAME', imageFileName: 'FAKE IMAGE' }];
-        httpSpy.get.and.nextOneTimeWith(fakeLlamas);
-        
+        queryConfig = null;
+        fakeLlamas = [{ id: 'fake id', name: 'fake name', imageFileName: '1.jpg' }];
+        httpAdapterServiceSpy.get
+          .mustBeCalledWith(LLAMAS_REMOTE_PATH)
+          .nextOneTimeWith(fakeLlamas);
       });
       Then(() => {
         expect(actualResult).toEqual(fakeLlamas);
       });
     });
 
+    describe('given config with filters then call url with query params & return llamas', () => {
+      Given(() => {
+        queryConfig = {
+          filters: {
+            featured: true
+          }
+        };
+        fakeLlamas = [{ id: 'fake id', name: 'fake name', imageFileName: '1.jpg' }];
+
+        const expectedUrl = LLAMAS_REMOTE_PATH + '?featured=true';
+
+        httpAdapterServiceSpy.get
+          .mustBeCalledWith(expectedUrl)
+          .nextOneTimeWith(fakeLlamas);
+      });
+      Then(() => {
+        expect(actualResult).toEqual(fakeLlamas);
+      });
+    });
   });
 
   describe('METHOD: update', () => {
@@ -61,21 +79,24 @@ describe('LlamaRemoteService', () => {
     Given(() => {
       errorIsExpected = false;
     });
-    
 
-    When(fakeAsync(async () => {
-      try {
-        actualResult = await serviceUnderTest.update(fakeLlamaIdArg, fakeLlamaChangesArg);  
-      } catch (error) {
-        if (!errorIsExpected) {
-          throw error;
+    When(
+      fakeAsync(async () => {
+        try {
+          actualResult = await serviceUnderTest.update(
+            fakeLlamaIdArg,
+            fakeLlamaChangesArg
+          );
+        } catch (error) {
+          if (!errorIsExpected) {
+            throw error;
+          }
+          actualError = error;
         }
-        actualError = error;
-      }
-    }));
+      })
+    );
 
     describe('Given update was successful THEN return the updated llama', () => {
-
       Given(() => {
         fakeLlamaIdArg = 'FAKE ID';
         fakeLlamaChangesArg = {
@@ -106,13 +127,12 @@ describe('LlamaRemoteService', () => {
       Then(() => {
         expect(actualError).toEqual('FAKE ERROR');
       });
-
     });
   });
 
   describe('METHOD: create', () => {
     let fakeBasicLlamaDetails: Partial<Llama>;
-    
+
     Given(() => {
       fakeBasicLlamaDetails = {
         name: 'FAKE NAME',
@@ -131,14 +151,15 @@ describe('LlamaRemoteService', () => {
         .resolveWith(expectedReturnedLlama);
     });
 
-    When(fakeAsync(async () => {
-      actualResult = await serviceUnderTest.create(fakeBasicLlamaDetails);
-    }));
+    When(
+      fakeAsync(async () => {
+        actualResult = await serviceUnderTest.create(fakeBasicLlamaDetails);
+      })
+    );
 
     Then(() => {
       expect(actualResult).toEqual(expectedReturnedLlama);
     });
-    
   });
 
   describe('METHOD: getByUserId', () => {
@@ -153,22 +174,22 @@ describe('LlamaRemoteService', () => {
 
       const url = LLAMAS_REMOTE_PATH + '?userId=' + fakeUserId;
 
-      httpAdapterServiceSpy.get.mustBeCalledWith(url)
+      httpAdapterServiceSpy.get
+        .mustBeCalledWith(url)
         .nextOneTimeWith([expectedReturnedUserLlama]);
     });
 
     When(() => {
-      serviceUnderTest.getByUserId(fakeUserId)
-        .subscribe(result => actualResult = result);
+      serviceUnderTest
+        .getByUserId(fakeUserId)
+        .subscribe(result => (actualResult = result));
     });
 
     Then(() => {
       expect(actualResult).toEqual(expectedReturnedUserLlama);
     });
-
   });
 });
-
 
 function createDefaultFakeLlama(): Llama {
   return { id: 'FAKE ID', name: 'FAKE NAME', imageFileName: 'FAKE IMAGE' };

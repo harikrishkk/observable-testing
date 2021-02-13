@@ -3,8 +3,8 @@ import { Llama } from '../../_types/llama.type';
 import { LlamaRemoteService } from '../llama-remote/llama-remote.service';
 import { RouterAdapterService } from '../adapters/router-adapter/router-adapter.service';
 import { appRoutesNames } from '../../app.routes.names';
-import { Observable, BehaviorSubject } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { Observable, BehaviorSubject, Subject } from 'rxjs';
+import { map, mergeMap } from 'rxjs/operators';
 import produce from 'immer';
 
 @Injectable({
@@ -12,16 +12,23 @@ import produce from 'immer';
 })
 export class LlamaStateService {
   private userLlamaSubject: BehaviorSubject<Llama> = new BehaviorSubject(null);
-
+  private mutationSubject = new Subject();
   constructor(
     private llamaRemoteService: LlamaRemoteService,
     private routerAdapterService: RouterAdapterService
   ) {}
 
   getFeaturedLlamas$(): Observable<Llama[]> {
-    return this.llamaRemoteService
-      .getLlamasFromServer()
-      .pipe(map(llamas => this.decorateWithIsPoked(llamas)));
+    return this.mutationSubject.pipe(
+      mergeMap(_ => {
+        return this.llamaRemoteService.getMany({
+          filters: {
+            featured: true
+          }
+        });
+      }),
+      map(llamas => this.decorateWithIsPoked(llamas))
+    );
   }
 
   private decorateWithIsPoked(llamas: Llama[]): Llama[] {
@@ -54,6 +61,8 @@ export class LlamaStateService {
     this.llamaRemoteService.update(llama.id, {
       pokedByTheseLlamas: pokedByClone
     });
+
+    this.mutationSubject.next();
   }
 
   getUserLlama$(): Observable<Llama> {

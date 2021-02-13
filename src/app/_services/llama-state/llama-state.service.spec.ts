@@ -1,3 +1,4 @@
+import { QueryConfig } from './../../_types/query-config.type';
 import { LlamaStateService } from './llama-state.service';
 import { TestBed, fakeAsync } from '@angular/core/testing';
 import { Llama } from '../../_types/llama.type';
@@ -40,6 +41,13 @@ describe('LlamaStateService', () => {
   }
 
   describe('METHOD: getFeaturedLlamas$', () => {
+    let expectedQueryConfig: QueryConfig;
+    expectedQueryConfig = {
+      filters: {
+        featured: true
+      }
+    };
+
     When(() => {
       serviceUnderTest.getFeaturedLlamas$().subscribe(value => (actualResult = value));
     });
@@ -47,7 +55,9 @@ describe('LlamaStateService', () => {
     describe('given llamas loaded successfully from server', () => {
       Given(() => {
         fakeLlamas = [{ id: 'FAKE ID', name: 'FAKE NAME', imageFileName: 'FAKE IMAGE' }];
-        llamaRemoteServiceSpy.getLlamasFromServer.and.nextOneTimeWith(fakeLlamas);
+        llamaRemoteServiceSpy.getMany
+          .mustBeCalledWith(expectedQueryConfig)
+          .nextOneTimeWith(fakeLlamas);
       });
 
       Then(() => {
@@ -62,7 +72,9 @@ describe('LlamaStateService', () => {
         fakePokedLlama.pokedByTheseLlamas = [fakeUserLlamaId];
         fakeLlamas = [fakePokedLlama];
         setupAndEmitUserLlamaWithId(fakeUserLlamaId);
-        llamaRemoteServiceSpy.getLlamasFromServer.and.nextOneTimeWith(fakeLlamas);
+        llamaRemoteServiceSpy.getMany
+          .mustBeCalledWith(expectedQueryConfig)
+          .nextOneTimeWith(fakeLlamas);
       });
       Then(() => {
         const expectedPokedLlama: Llama = actualResult[0];
