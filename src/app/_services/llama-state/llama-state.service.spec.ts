@@ -1,12 +1,14 @@
 import { QueryConfig } from './../../_types/query-config.type';
 import { LlamaStateService } from './llama-state.service';
-import { TestBed, fakeAsync } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Llama } from '../../_types/llama.type';
 import { LlamaRemoteService } from '../llama-remote/llama-remote.service';
 import { Spy, createSpyFromClass } from 'jasmine-auto-spies';
 import { appRoutesNames } from '../../app.routes.names';
 import { RouterAdapterService } from '../adapters/router-adapter/router-adapter.service';
 import { ObserverSpy } from '@hirez_io/observer-spy';
+import { of } from 'rxjs';
+import { delay } from 'rxjs/operators';
 describe('LlamaStateService', () => {
   let serviceUnderTest: LlamaStateService;
   let llamaRemoteServiceSpy: Spy<LlamaRemoteService>;
@@ -64,20 +66,49 @@ describe('LlamaStateService', () => {
       });
     });
 
-    describe('given llamas loaded successfully from server, when subscribing', () => {
+    describe('GIVEN llamas return successfully When subscribing & interval passes ', () => {
       Given(() => {
-        fakeLlamas = [{ id: 'FAKE ID', name: 'FAKE NAME', imageFileName: 'FAKE IMAGE' }];
+        observerSpy = new ObserverSpy();
+        llamaRemoteServiceSpy.getMany.and.nextWith();
+      });
+      When(
+        fakeAsync(() => {
+          const sub = serviceUnderTest.getFeaturedLlamas$().subscribe(observerSpy);
+          tick(5000 * 2);
+          sub.unsubscribe();
+        })
+      );
+      Then(() => {
+        expect(observerSpy.getValuesLength()).toBe(3);
+      });
+    });
+
+    describe('given first remote call... llamas loaded successfully from server, when subscribing', () => {
+      let firstResult: Llama[];
+      let secondResult: Llama[];
+      Given(() => {
+        firstResult = [createDefaultFakeLlama(1)];
+        secondResult = [createDefaultFakeLlama(2)];
+
+        const firstObservableWithDelay = of(firstResult).pipe(delay(200));
+        const secondObservable = of(secondResult);
+
         llamaRemoteServiceSpy.getMany
-          .mustBeCalledWith(expectedQueryConfig)
-          .nextOneTimeWith(fakeLlamas);
+          .withArgs(expectedQueryConfig)
+          .and.returnValues(firstObservableWithDelay, secondObservable);
       });
 
-      When(() => {
-        serviceUnderTest.getFeaturedLlamas$().subscribe(value => (actualResult = value));
-      });
+      When(
+        fakeAsync(() => {
+          const sub = serviceUnderTest.getFeaturedLlamas$().subscribe(observerSpy);
+          serviceUnderTest['mutationSubject'].next();
+          tick(200);
+          sub.unsubscribe();
+        })
+      );
 
       Then(() => {
-        expect(actualResult).toEqual(fakeLlamas);
+        expect(observerSpy.getValues()).toEqual([secondResult]);
       });
     });
 
@@ -197,6 +228,11 @@ describe('LlamaStateService', () => {
   });
 });
 
-function createDefaultFakeLlama(): Llama {
-  return { id: 'FAKE ID', name: 'FAKE NAME', imageFileName: 'FAKE IMAGE' };
+function createDefaultFakeLlama(index?: number): Llama {
+  return {
+    id: `FAKE ID ${index}`,
+    name: `FAKE NAME ${index}`,
+    imageFileName: `fake img ${index}`
+  };
 }
+// Part 15 started

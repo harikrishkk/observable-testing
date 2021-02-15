@@ -3,8 +3,8 @@ import { Llama } from '../../_types/llama.type';
 import { LlamaRemoteService } from '../llama-remote/llama-remote.service';
 import { RouterAdapterService } from '../adapters/router-adapter/router-adapter.service';
 import { appRoutesNames } from '../../app.routes.names';
-import { Observable, BehaviorSubject, Subject } from 'rxjs';
-import { map, mergeMap } from 'rxjs/operators';
+import { Observable, BehaviorSubject, Subject, merge, interval } from 'rxjs';
+import { map, mergeMap, switchMap } from 'rxjs/operators';
 import produce from 'immer';
 
 @Injectable({
@@ -19,8 +19,8 @@ export class LlamaStateService {
   ) {}
 
   getFeaturedLlamas$(): Observable<Llama[]> {
-    return this.mutationSubject.pipe(
-      mergeMap(_ =>
+    return merge(this.mutationSubject, interval(5000)).pipe(
+      switchMap(_ =>
         this.llamaRemoteService.getMany({
           filters: {
             featured: true
